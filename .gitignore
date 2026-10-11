@@ -1,0 +1,7 @@
+.gradle/
+build/
+*.user.xml
+*.bak
+*.user.json
+.idea/
+backup/

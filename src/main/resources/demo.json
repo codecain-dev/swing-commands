@@ -1,0 +1,116 @@
+{
+  "$schema": "./swing-command-schema.json",
+  "version": 1,
+  "name": "SwingCommands Demo",
+  "commands": {
+    "app.hello": {
+      "class": "dev.codecain.swing.commands.demo.Demo$Hello",
+      "category": "Application"
+    },
+    "view.grid": {
+      "class": "dev.codecain.swing.commands.demo.Demo$Grid",
+      "category": "Application"
+    },
+    "app.customize": {
+      "class": "dev.codecain.swing.commands.demo.Demo$Customize",
+      "category": "Application"
+    },
+    "theme.light": {
+      "class": "dev.codecain.swing.commands.demo.Demo$Light",
+      "category": "Appearance"
+    },
+    "theme.dark": {
+      "class": "dev.codecain.swing.commands.demo.Demo$Dark",
+      "category": "Appearance"
+    }
+  },
+  "menus": [
+    {
+      "id": "commands",
+      "label": "Commands",
+      "mnemonic": "C",
+      "items": [
+        {
+          "command": "app.hello"
+        },
+        {
+          "command": "view.grid"
+        },
+        {
+          "separator": true
+        },
+        {
+          "command": "app.customize"
+        }
+      ]
+    },
+    {
+      "id": "appearance",
+      "label": "Appearance",
+      "items": [
+        {
+          "toggleGroup": "Theme",
+          "items": [
+            {
+              "command": "theme.light"
+            },
+            {
+              "command": "theme.dark"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "toolbars": [
+    {
+      "id": "main",
+      "label": "Main",
+      "showLabels": true,
+      "items": [
+        {
+          "command": "app.hello"
+        },
+        {
+          "command": "view.grid"
+        },
+        {
+          "separator": true
+        },
+        {
+          "command": "app.customize"
+        }
+      ]
+    },
+    {
+      "id": "appearance",
+      "label": "Appearance",
+      "showLabels": true,
+      "items": [
+        {
+          "toggleGroup": "Theme",
+          "items": [
+            {
+              "command": "theme.light"
+            },
+            {
+              "command": "theme.dark"
+            }
+          ]
+        },
+        {
+          "dropdown": "Quick Command",
+          "defaultCommand": "app.hello",
+          "items": [
+            {
+              "command": "app.hello"
+            },
+            {
+              "command": "app.customize"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

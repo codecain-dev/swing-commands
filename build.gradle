@@ -1,0 +1,81 @@
+plugins {
+    id 'java-library'
+    id 'application'
+    id 'maven-publish'
+    id 'com.gradleup.shadow' version '8.3.6'
+}
+
+group = 'dev.codecain'
+version = '0.2.0-SNAPSHOT'
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+}
+
+repositories { mavenCentral() }
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+    withSourcesJar()
+}
+tasks.register('integrationTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.codecain.swing.commands.IntegrationTest'
+    systemProperty 'java.awt.headless', 'true'
+}
+test { dependsOn integrationTest }
+application { mainClass = 'dev.codecain.swing.commands.demo.Demo' }
+
+dependencies { implementation 'com.networknt:json-schema-validator:1.5.6' }
+
+
+// Keep the normal library JAR; the -all JAR is for single-file deployment.
+tasks.named('shadowJar') {
+    archiveClassifier = 'all'
+    mergeServiceFiles()
+    relocate 'com.fasterxml.jackson', 'dev.codecain.swing.commands.internal.shaded.jackson'
+    relocate 'com.networknt', 'dev.codecain.swing.commands.internal.shaded.networknt'
+    relocate 'com.ethlo', 'dev.codecain.swing.commands.internal.shaded.ethlo'
+    relocate 'org.yaml.snakeyaml', 'dev.codecain.swing.commands.internal.shaded.snakeyaml'
+    relocate 'org.slf4j', 'dev.codecain.swing.commands.internal.shaded.slf4j'
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+}
+
+// Standalone visual editor for application default configurations.
+tasks.register('runEditor', JavaExec) {
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'dev.codecain.swing.commands.editor.ConfigurationEditor'
+    if (project.hasProperty('configFile')) args project.property('configFile')
+}
+
+tasks.register('editorTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.codecain.swing.commands.editor.ConfigurationEditorTest'
+    systemProperty 'java.awt.headless', 'true'
+}
+tasks.named('check') { dependsOn editorTest }
+
+// Source files use UTF-8, including UI labels and symbols on Windows.
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+tasks.register('iconPreviewTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.codecain.swing.commands.editor.IconPreviewTest'
+    systemProperty 'java.awt.headless', 'true'
+}
+tasks.named('check') { dependsOn iconPreviewTest }
+
+tasks.register('keyStrokeRecorderTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.codecain.swing.commands.shortcut.KeyStrokeRecorderTest'
+    systemProperty 'java.awt.headless', 'true'
+}
+tasks.named('check') { dependsOn keyStrokeRecorderTest }
