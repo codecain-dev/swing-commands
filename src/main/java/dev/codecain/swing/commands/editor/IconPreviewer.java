@@ -22,9 +22,16 @@ import javax.swing.event.DocumentListener;
 /** Shows a live icon preview without loading images on the Swing event thread. */
 public final class IconPreviewer extends JPanel {
 
+    /** Resolves icon paths using the caller's active configuration context. */
     @FunctionalInterface
     public interface Resolver {
 
+        /**
+         * Resolves an icon path in the context of the edited configuration.
+         *
+         * @param path resource or file path entered by the user
+         * @return resolved icon
+         */
         Icon resolve(String path);
     }
 
@@ -39,6 +46,12 @@ public final class IconPreviewer extends JPanel {
     private SwingWorker<Icon, Void> worker;
     private int revision;
 
+    /**
+     * Creates a live preview attached to an icon-path field.
+     *
+     * @param field text field whose value determines the preview
+     * @param resolverSupplier supplies the resolver for the current editing context
+     */
     public IconPreviewer(JTextField field, Supplier<Resolver> resolverSupplier) {
 
         super(new BorderLayout(6, 0));
@@ -76,6 +89,7 @@ public final class IconPreviewer extends JPanel {
         preview.getAccessibleContext().setAccessibleName("Icon preview");
     }
 
+    /** Reloads the preview using the current field value and resolver. */
     public void refresh() {
 
         revision++;
@@ -107,6 +121,7 @@ public final class IconPreviewer extends JPanel {
             @Override
             protected void done() {
 
+                // A slower earlier load must not replace the preview for a newer field value.
                 if (requestRevision != revision || isCancelled()) {
                     return;
                 }

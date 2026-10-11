@@ -33,6 +33,7 @@ public final class ConfigurationEditor extends JPanel {
 
     private boolean refreshing;
 
+    /** Creates an editor for application-default configuration files. */
     public ConfigurationEditor() {
         initializeUI();
         refresh();
@@ -560,6 +561,11 @@ public final class ConfigurationEditor extends JPanel {
         panel.add(button);
     }
 
+    /**
+     * Opens the standalone configuration editor.
+     *
+     * @param args optional configuration file path to open
+     */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {
