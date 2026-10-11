@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SwingCommands Application Configuration",
+  "description": "Register commands by stable ID and describe default menus and toolbars.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "commands": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "class": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Fully qualified Command class with a no-argument constructor."
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Command-tree category."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Optional override of the Java command name."
+          },
+          "tooltip": {
+            "type": "string"
+          },
+          "selected": {
+            "type": "boolean",
+            "description": "Initial selected state for a BooleanCommand. Omit to inherit its Java default."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Initial enabled state for any command, independent of callback registration. Omit to inherit its Java default."
+          },
+          "shortcut": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Swing pressed KeyStroke, e.g. ctrl pressed S. Null clears the shortcut."
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Classpath image resource or local path. Null removes the icon."
+          }
+        },
+        "required": [
+          "class"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "menus": {
+      "type": "array",
+      "items": {
+        "$ref": "command-layout-schema.json#/$defs/menu"
+      }
+    },
+    "toolbars": {
+      "type": "array",
+      "items": {
+        "$ref": "command-layout-schema.json#/$defs/toolbar"
+      }
+    }
+  },
+  "required": [
+    "version",
+    "commands"
+  ],
+  "additionalProperties": false
+}

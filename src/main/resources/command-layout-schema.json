@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SwingCommands Layout Definitions",
+  "description": "Shared menu and toolbar definitions for application defaults and user preferences.",
+  "$defs": {
+    "commandRef": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    },
+    "separator": {
+      "type": "object",
+      "properties": {
+        "separator": {
+          "const": true
+        }
+      },
+      "required": [
+        "separator"
+      ],
+      "additionalProperties": false
+    },
+    "toggle": {
+      "type": "object",
+      "properties": {
+        "toggleGroup": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/commandRef"
+          }
+        }
+      },
+      "required": [
+        "toggleGroup",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "dropdown": {
+      "type": "object",
+      "properties": {
+        "dropdown": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "defaultCommand": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/commandRef"
+          }
+        }
+      },
+      "required": [
+        "dropdown",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "menu": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "mnemonic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/menuItem"
+          }
+        }
+      },
+      "required": [
+        "label",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "toolbar": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "floatable": {
+          "type": "boolean"
+        },
+        "showLabels": {
+          "type": "boolean"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/toolbarItem"
+          }
+        }
+      },
+      "required": [
+        "label",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "menuItem": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/commandRef"
+        },
+        {
+          "$ref": "#/$defs/separator"
+        },
+        {
+          "$ref": "#/$defs/toggle"
+        },
+        {
+          "$ref": "#/$defs/menu"
+        }
+      ]
+    },
+    "toolbarItem": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/commandRef"
+        },
+        {
+          "$ref": "#/$defs/separator"
+        },
+        {
+          "$ref": "#/$defs/toggle"
+        },
+        {
+          "$ref": "#/$defs/dropdown"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SwingCommands User Preferences",
+  "description": "Presentation overrides and optional replacement layouts. Omitted values inherit application defaults.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "commands": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Optional override of the Java command name."
+          },
+          "tooltip": {
+            "type": "string"
+          },
+          "shortcut": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Swing pressed KeyStroke, e.g. ctrl pressed S. Null clears the shortcut."
+          },
+          "icon": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Classpath image resource or local path. Null removes the icon."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "menus": {
+      "type": "array",
+      "items": {
+        "$ref": "command-layout-schema.json#/$defs/menu"
+      }
+    },
+    "toolbars": {
+      "type": "array",
+      "items": {
+        "$ref": "command-layout-schema.json#/$defs/toolbar"
+      }
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "additionalProperties": false
+}
