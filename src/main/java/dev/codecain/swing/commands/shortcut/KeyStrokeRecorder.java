@@ -23,6 +23,7 @@ public final class KeyStrokeRecorder extends JPanel {
 
     private KeyStroke keyStroke;
 
+    /** Creates an empty recorder ready to capture a keyboard shortcut. */
     public KeyStrokeRecorder() {
         super(new BorderLayout(4, 0));
 
@@ -51,19 +52,32 @@ public final class KeyStrokeRecorder extends JPanel {
         add(clearButton, BorderLayout.EAST);
     }
 
-    /** Returns the captured key combination, or null when the field is clear. */
+    /**
+     * Returns the captured key combination, or {@code null} when the field is clear.
+     *
+     * @return recorded Swing keystroke, or {@code null} when no shortcut is set
+     */
     public KeyStroke getKeyStroke() {
 
         return keyStroke;
     }
 
-    /** Sets the key combination shown by the recorder. */
+    /**
+     * Sets the key combination shown by the recorder.
+     *
+     * @param keyStroke keystroke to display, or {@code null} to clear the field
+     */
     public void setKeyStroke(KeyStroke keyStroke) {
 
         this.keyStroke = keyStroke;
         display.setText(keyStroke == null ? "" : format(keyStroke));
     }
 
+    /**
+     * Enables or disables the recorder and its child controls.
+     *
+     * @param enabled {@code true} to enable shortcut capture
+     */
     @Override
     public void setEnabled(boolean enabled) {
 

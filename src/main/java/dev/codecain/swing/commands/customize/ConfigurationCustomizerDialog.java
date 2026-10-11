@@ -16,6 +16,12 @@ public final class ConfigurationCustomizerDialog extends JDialog {
 
     private JLabel status;
 
+    /**
+     * Creates a modal editor for the live configuration.
+     *
+     * @param owner parent window for this dialog
+     * @param config configuration whose command and layout settings will be edited
+     */
     public ConfigurationCustomizerDialog(Window owner, Configuration config) {
 
         super(owner, "Customize Commands, Menus and Toolbars", ModalityType.APPLICATION_MODAL);

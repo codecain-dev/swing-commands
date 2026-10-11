@@ -2,9 +2,19 @@ package dev.codecain.swing.commands.command;
 
 import java.awt.event.ActionEvent;
 
-/** A command whose behavior is implemented directly by its subclass. */
+/**
+ * Base for commands whose behavior is implemented by the command class.
+ *
+ * <p>Enabled events are forwarded to {@link #performCommand(ActionEvent)}. Events are ignored
+ * while the command is disabled.
+ */
 public abstract class CallableCommand extends Command {
 
+    /**
+     * Forwards the event to {@link #performCommand(ActionEvent)} when this command is enabled.
+     *
+     * @param event Swing action event received by this command
+     */
     @Override
     public final void actionPerformed(ActionEvent event) {
 
@@ -13,5 +23,10 @@ public abstract class CallableCommand extends Command {
         }
     }
 
+    /**
+     * Performs this command's application behavior.
+     *
+     * @param event Swing action event that triggered the command
+     */
     public abstract void performCommand(ActionEvent event);
 }

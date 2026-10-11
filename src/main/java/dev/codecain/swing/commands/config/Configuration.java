@@ -201,26 +201,59 @@ public final class Configuration implements AutoCloseable {
         return result;
     }
 
+    /**
+     * Returns the application name defined by the configuration.
+     *
+     * @return configured application name
+     */
     public String getName() {
         return name;
     }
 
+    /**
+     * Returns the tree model containing registered commands and command groups.
+     *
+     * @return live command model
+     */
     public ResourceModel getCommandModel() {
         return commands;
     }
 
+    /**
+     * Returns the live tree model that defines the menu layout.
+     *
+     * @return live menu model
+     */
     public ResourceModel getMenuModel() {
         return menus;
     }
 
+    /**
+     * Returns the live tree model that defines the toolbar layout.
+     *
+     * @return live toolbar model
+     */
     public ResourceModel getToolbarModel() {
         return toolbars;
     }
 
+    /**
+     * Returns the commands registered by this configuration.
+     *
+     * @return unmodifiable collection of command instances
+     */
     public Collection<Command> getCommands() {
         return commandsById.values();
     }
 
+    /**
+     * Finds the registered command instance assignable to the requested type.
+     *
+     * @param <T> command type
+     * @param type class or superclass of the command to find
+     * @return matching registered command
+     * @throws IllegalArgumentException if no registered command matches the type
+     */
     public <T extends Command> T getCommand(Class<T> type) {
 
         for (Command command : commandsById.values()) {
@@ -232,14 +265,29 @@ public final class Configuration implements AutoCloseable {
         throw new IllegalArgumentException("Unregistered command " + type.getName());
     }
 
+    /**
+     * Returns the live menu bar built from the menu model.
+     *
+     * @return configuration menu bar
+     */
     public JMenuBar getMenuBar() {
         return menuBar;
     }
 
+    /**
+     * Returns the live panel containing the configured toolbars.
+     *
+     * @return toolbar panel
+     */
     public JPanel getToolbarPanel() {
         return toolbarPanel;
     }
 
+    /**
+     * Returns a warning recorded while loading user preferences, if any.
+     *
+     * @return warning message, or an empty optional when preferences loaded cleanly
+     */
     public Optional<String> getLoadWarning() {
         return Optional.ofNullable(loadWarning);
     }
@@ -248,14 +296,30 @@ public final class Configuration implements AutoCloseable {
         loadWarning = message;
     }
 
+    /**
+     * Installs this configuration's keyboard accelerators on a window root pane.
+     *
+     * @param window root pane that should receive the bindings
+     */
     public void installKeyBindings(JRootPane window) {
         keys.install(window);
     }
 
+    /**
+     * Removes this configuration's keyboard accelerators from a window root pane.
+     *
+     * @param window root pane from which to remove the bindings
+     */
     public void uninstallKeyBindings(JRootPane window) {
         keys.uninstall(window);
     }
 
+    /**
+     * Finds the command assigned to a keyboard accelerator.
+     *
+     * @param stroke accelerator to search for
+     * @return matching command, or {@code null} when unassigned
+     */
     public Command findKeyBinding(KeyStroke stroke) {
 
         if (stroke == null) {
@@ -271,6 +335,15 @@ public final class Configuration implements AutoCloseable {
         return null;
     }
 
+    /**
+     * Assigns an accelerator to a registered command, optionally clearing an existing assignment.
+     *
+     * @param command registered command to update
+     * @param stroke accelerator to assign, or {@code null} to clear the assignment
+     * @param reassign {@code true} to remove the same accelerator from another command
+     * @throws IllegalArgumentException if the command is unregistered, the accelerator is invalid,
+     *         or a conflict exists while {@code reassign} is {@code false}
+     */
     public void setKeyBinding(Command command, KeyStroke stroke, boolean reassign) {
 
         requireCommand(command);
@@ -293,6 +366,13 @@ public final class Configuration implements AutoCloseable {
         command.setKeyBinding(stroke);
     }
 
+    /**
+     * Restores a command's Java-defined presentation and shortcut defaults.
+     *
+     * @param command registered command to reset
+     * @throws IllegalArgumentException if the command is unregistered or its default shortcut
+     *         conflicts with another command
+     */
     public void resetCommand(Command command) {
 
         requireCommand(command);
@@ -308,6 +388,7 @@ public final class Configuration implements AutoCloseable {
         state.apply(command);
     }
 
+    /** Restores every command's default keyboard accelerator. */
     public void resetKeyBindings() {
 
         for (Command command : commandsById.values()) {
@@ -319,6 +400,13 @@ public final class Configuration implements AutoCloseable {
         }
     }
 
+    /**
+     * Saves the current menu, toolbar, and command preferences to the configured user file.
+     *
+     * @throws IOException if the user configuration cannot be written
+     * @throws IllegalStateException if no user configuration path was supplied
+     * @throws IllegalArgumentException if the layout or shortcuts are invalid
+     */
     public void saveUserLayout() throws IOException {
 
         if (userFile == null) {
@@ -343,6 +431,11 @@ public final class Configuration implements AutoCloseable {
 
     /**
      * Changes live state; Save persists it. Closing the customizer is not Cancel.
+     */
+    /**
+     * Restores the live command presentation and layouts to their application defaults.
+     *
+     * <p>This changes the current session; call {@link #saveUserLayout()} to persist the reset.
      */
     public void resetToDefaults() {
 
@@ -518,6 +611,7 @@ public final class Configuration implements AutoCloseable {
             JMenuItem item = command.getMenuPresenter();
             presenters.add(item);
             item.addActionListener(event -> {
+                // Keep the selected choice in the layout model so saving preserves it.
                 for (int j = 0; j < node.getChildCount(); j++) {
                     ResourceNode choice = node.getChildAt(j);
                     boolean selected = choice == child;
@@ -559,6 +653,7 @@ public final class Configuration implements AutoCloseable {
 
     private void releasePresenters() {
 
+        // Detach old actions before rebuilding so commands do not retain obsolete components.
         for (AbstractButton presenter : presenters) {
             presenter.setAction(null);
         }
@@ -651,6 +746,7 @@ public final class Configuration implements AutoCloseable {
             updating = true;
 
             try {
+                // Clearing peers fires selection events; the guard prevents recursive updates.
                 for (BooleanCommand command : commands) {
                     if (command != selected) {
                         command.setSelected(false);
@@ -670,6 +766,7 @@ public final class Configuration implements AutoCloseable {
         }
     }
 
+    /** Releases presenter and key-binding resources owned by this configuration. */
     @Override
     public void close() {
 

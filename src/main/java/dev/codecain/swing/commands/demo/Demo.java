@@ -13,6 +13,8 @@ import dev.codecain.swing.commands.customize.ConfigurationCustomizerDialog;
  * Run with Gradle 'run'. User settings stay in the working directory.
  */
 public final class Demo {
+
+    /** Sample callback command used to demonstrate menu, toolbar, and shortcut invocation. */
     public static class Hello extends CallbackCommand {
         @Override
         protected void initialize() {
@@ -22,6 +24,7 @@ public final class Demo {
         }
     }
 
+    /** Sample callback command that demonstrates shared toggle state and shortcuts. */
     public static class Grid extends BooleanCallbackCommand {
         @Override
         protected void initialize() {
@@ -31,6 +34,7 @@ public final class Demo {
         }
     }
 
+    /** Sample boolean command used in the exclusive appearance selection. */
     public static class Light extends BooleanCommand {
         @Override
         protected void initialize() {
@@ -39,6 +43,7 @@ public final class Demo {
         }
     }
 
+    /** Sample boolean command used in the exclusive appearance selection. */
     public static class Dark extends BooleanCommand {
         @Override
         protected void initialize() {
@@ -46,6 +51,7 @@ public final class Demo {
         }
     }
 
+    /** Sample callback command that opens the runtime customizer. */
     public static class Customize extends CallbackCommand {
         @Override
         protected void initialize() {
@@ -53,6 +59,11 @@ public final class Demo {
         }
     }
 
+    /**
+     * Starts the sample application.
+     *
+     * @param args unused command-line arguments
+     */
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {
@@ -90,4 +101,3 @@ public final class Demo {
         });
     }
 }
-

@@ -36,6 +36,11 @@ public final class KeyBindingManager implements AutoCloseable {
             ActionMap map) {
     }
 
+    /**
+     * Creates a manager that observes accelerator changes for the supplied commands.
+     *
+     * @param commands commands whose shortcuts should be managed
+     */
     public KeyBindingManager(Collection<Command> commands) {
 
         this.commands = commands;
@@ -45,6 +50,11 @@ public final class KeyBindingManager implements AutoCloseable {
         }
     }
 
+    /**
+     * Installs the current command accelerators on a window root pane.
+     *
+     * @param root root pane that should receive the bindings
+     */
     public void install(JRootPane root) {
 
         if (windows.containsKey(root)) {
@@ -65,6 +75,11 @@ public final class KeyBindingManager implements AutoCloseable {
         refresh();
     }
 
+    /**
+     * Removes the bindings installed on a root pane and restores its previous maps.
+     *
+     * @param root root pane from which to remove the bindings
+     */
     public void uninstall(JRootPane root) {
 
         Binding binding = windows.remove(root);
@@ -101,6 +116,7 @@ public final class KeyBindingManager implements AutoCloseable {
         }
     }
 
+    /** Removes bindings from all windows and stops observing command changes. */
     @Override
     public void close() {
 

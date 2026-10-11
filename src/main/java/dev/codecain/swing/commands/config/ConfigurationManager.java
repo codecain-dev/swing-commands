@@ -68,6 +68,8 @@ public final class ConfigurationManager {
 
     /**
      * Returns the shared manager used by the standard runtime setup.
+     *
+     * @return shared configuration manager
      */
     public static ConfigurationManager getDefault() {
         return DEFAULT;
@@ -76,6 +78,7 @@ public final class ConfigurationManager {
     /**
      * Returns the configuration most recently installed by this manager.
      *
+     * @return current live configuration
      * @throws IllegalStateException if this manager has not installed a configuration
      */
     public Configuration getCurrent() {
@@ -600,6 +603,7 @@ public final class ConfigurationManager {
         Command selectedCommand = parsed.commandsById.get(selectedId);
         boolean found = false;
 
+        // A dropdown default must refer to one of this dropdown's own entries.
         for (int i = 0; i < dropdown.getChildCount(); i++) {
             ResourceNode child = dropdown.getChildAt(i);
 

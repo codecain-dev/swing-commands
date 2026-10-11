@@ -151,6 +151,8 @@ final class LayoutEditor extends JPanel {
         DefaultMutableTreeNode parent = (DefaultMutableTreeNode) node.getParent();
         ObjectNode object = entry(node).node;
         ObjectNode container = entry(parent).node;
+
+        // A dropdown cannot keep a default that points to an item removed from its choices.
         if (object.has("command") && container.path("defaultCommand").equals(object.get("command"))) {
             container.remove("defaultCommand");
         }
