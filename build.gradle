@@ -2,6 +2,7 @@ plugins {
     id 'java-library'
     id 'application'
     id 'maven-publish'
+    id 'signing'
     id 'com.gradleup.shadow' version '8.3.6'
 }
 
@@ -44,10 +45,19 @@ publishing {
     }
 }
 
+signing {
+    useGpgCmd()
+    sign(publishing.publications.mavenJava)
+}
+
 repositories { mavenCentral() }
 java {
-    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+
     withSourcesJar()
+    withJavadocJar()
 }
 tasks.register('integrationTest', JavaExec) {
     dependsOn testClasses
