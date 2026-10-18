@@ -12,6 +12,35 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
+
+            pom {
+                name = 'Swing Commands'
+                description = 'A Java library for defining application commands across Swing menus, toolbars, and keyboard shortcuts.'
+                url = 'https://codecain.dev'
+
+                licenses {
+                    license {
+                        name = 'Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'jokent'
+                        name = 'Jon Kent'
+                        email = '344413344+codecain-dev@users.noreply.github.com'
+                        url = 'https://codecain.dev'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/codecain-dev/swing-commands.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/codecain-dev/swing-commands.git'
+                    url = 'https://github.com/codecain-dev/swing-commands'
+                }
+            }
         }
     }
 }

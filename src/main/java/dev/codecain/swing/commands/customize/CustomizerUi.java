@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Jon Kent
+ * https://codecain.dev
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package dev.codecain.swing.commands.customize;
 
 import java.awt.Component;
