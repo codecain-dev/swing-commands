@@ -31,7 +31,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'dev.codecain:swing-commands:0.2.0'
+    implementation 'dev.codecain:swing-commands:x.y.z'
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 <dependency>
     <groupId>dev.codecain</groupId>
     <artifactId>swing-commands</artifactId>
-    <version>0.2.0</version>
+    <version>x.y.z</version>
 </dependency>
 ```
 
