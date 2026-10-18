@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Jon Kent
+ * Copyright (c) 2026 Code Cain
  * https://codecain.dev
  * SPDX-License-Identifier: Apache-2.0
  */
