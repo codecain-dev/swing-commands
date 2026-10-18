@@ -28,9 +28,8 @@ publishing {
 
                 developers {
                     developer {
-                        id = 'jokent'
-                        name = 'Jon Kent'
-                        email = '344413344+codecain-dev@users.noreply.github.com'
+                        id = 'codecain-dev'
+                        name = 'Codecain Dev'
                         url = 'https://codecain.dev'
                     }
                 }
