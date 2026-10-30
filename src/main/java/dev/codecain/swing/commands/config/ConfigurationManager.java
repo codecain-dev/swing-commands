@@ -24,11 +24,14 @@ import dev.codecain.swing.commands.resource.ResourceNode.Kind;
 /**
  * Coordinates loading, validation, and installation of a runtime configuration.
  *
- * <p>An installation starts with application defaults, optionally overlays user
- * preferences, and creates the live {@link Configuration} and its resource
- * models.</p>
+ * <p>An installation copies the factory configuration to the host application's
+ * settings directory on first run, then loads that application copy. The factory
+ * configuration remains the reset baseline.</p>
  */
 public final class ConfigurationManager {
+
+    /** Stable name of the configuration file stored in the host application's settings directory. */
+    public static final String CONFIGURATION_FILE_NAME = "swing-commands.json";
 
     private static final ConfigurationManager DEFAULT = new ConfigurationManager();
 
@@ -97,62 +100,49 @@ public final class ConfigurationManager {
     }
 
     /**
-     * Loads defaults from a classpath resource and installs them with optional user preferences.
-     * Invalid user preferences are left unapplied and recorded as a warning.
+     * Copies the factory configuration to the application settings directory when
+     * needed, then loads the application configuration from that directory.
      *
-     * @param anchor class used to locate the resource and its command classes
-     * @param resource classpath resource containing the default configuration
-     * @param userFile optional path for user preferences; {@code null} disables preferences
+     * @param anchor class used to locate the factory configuration and its command classes
+     * @param applicationSettingsDirectory directory for the application's saved configuration
      * @return the installed live configuration
      * @throws IOException if the resource is missing, malformed, or invalid
      */
-    public Configuration install(Class<?> anchor, String resource, Path userFile)
+    public Configuration install(Class<?> anchor, Path applicationSettingsDirectory)
             throws IOException {
 
-        try (InputStream input = anchor.getResourceAsStream(resource)) {
+        try (InputStream input = anchor.getResourceAsStream(
+                "/" + CONFIGURATION_FILE_NAME)) {
             if (input == null) {
-                throw new IOException("Missing configuration: " + resource);
+                throw new IOException(
+                        "Missing factory configuration resource: /"
+                                + CONFIGURATION_FILE_NAME);
             }
 
-            return install(input, anchor.getClassLoader(), userFile);
+            return install(input, anchor.getClassLoader(), applicationSettingsDirectory);
         }
     }
 
     /**
-     * Loads defaults from a JSON file and installs them with optional user preferences.
-     * Invalid user preferences are left unapplied and recorded as a warning.
+     * Reads factory configuration JSON from a stream, copies it to the application
+     * settings directory when needed, and installs the application copy.
      *
-     * @param file path to the default configuration
-     * @param userFile optional path for user preferences; {@code null} disables preferences
-     * @return the installed live configuration
-     * @throws IOException if the default file cannot be read or validated
-     */
-    public Configuration install(Path file, Path userFile) throws IOException {
-
-        try (InputStream input = Files.newInputStream(file)) {
-            return install(
-                    input,
-                    Thread.currentThread().getContextClassLoader(),
-                    userFile);
-        }
-    }
-
-    /**
-     * Reads default configuration JSON from a stream and installs the resulting models.
-     *
-     * <p>The stream supplies application defaults. If {@code userFile} exists, its
-     * preferences are applied on top of those defaults. Invalid preferences are
-     * left unapplied and recorded as a warning. This method does not close the
-     * supplied stream.</p>
+     * <p>The stream remains open after this method returns. The factory file is copied
+     * only when the stable application configuration file does not already exist.
+     * Invalid application configurations are preserved, left unapplied, and recorded
+     * as a warning.</p>
      *
      * @param input stream containing the default configuration JSON
      * @param loader class loader used to resolve command classes
-     * @param userFile optional path for user preferences; {@code null} disables preferences
+     * @param applicationSettingsDirectory directory for the application's saved configuration
      * @return the installed live configuration
      * @throws IOException if the defaults cannot be read, validated, or applied
      * @throws IllegalStateException if another configuration is still open
      */
-    public Configuration install(InputStream input, ClassLoader loader, Path userFile)
+    Configuration install(
+            InputStream input,
+            ClassLoader loader,
+            Path applicationSettingsDirectory)
             throws IOException {
 
         if (current != null && !current.isClosed()) {
@@ -160,7 +150,17 @@ public final class ConfigurationManager {
                     "Close the current configuration before installing another");
         }
 
-        Parsed defaults = parse(read(input, false), loader, null);
+        if (applicationSettingsDirectory == null) {
+            throw new IllegalArgumentException(
+                    "Application settings directory must be supplied");
+        }
+
+        byte[] factoryBytes = input.readAllBytes();
+        Parsed defaults = parse(read(new ByteArrayInputStream(factoryBytes)), loader);
+        Path applicationConfiguration = prepareApplicationConfiguration(
+                factoryBytes,
+                applicationSettingsDirectory);
+        SavedConfiguration saved = readSavedConfiguration(loader, applicationConfiguration);
         apply(defaults);
 
         Configuration config = new Configuration(
@@ -169,9 +169,23 @@ public final class ConfigurationManager {
                 defaults.menus,
                 defaults.toolbars,
                 defaults.commandsById,
-                userFile);
+                applicationConfiguration);
 
-        loadUserPreferences(config, loader, defaults, userFile);
+        if (saved.parsed() != null) {
+            try {
+                config.applyUserConfiguration(saved.parsed());
+            } catch (IllegalArgumentException exception) {
+                config.resetToDefaults();
+                config.setLoadWarning(
+                        "Application configuration was preserved but not applied; "
+                                + "the factory configuration was loaded: "
+                                + exception.getMessage());
+            }
+        }
+
+        if (saved.warning() != null) {
+            config.setLoadWarning(saved.warning());
+        }
 
         current = config;
 
@@ -179,48 +193,63 @@ public final class ConfigurationManager {
     }
 
     /**
-     * Applies saved preferences when available, falling back to defaults if they are invalid.
+     * Creates the application directory and initial user configuration when needed.
      */
-    private void loadUserPreferences(
-            Configuration config,
-            ClassLoader loader,
-            Parsed defaults,
-            Path userFile) {
+    private static Path prepareApplicationConfiguration(
+            byte[] factoryBytes,
+            Path applicationSettingsDirectory) throws IOException {
 
-        if (userFile == null || !Files.exists(userFile)) {
-            return;
+        Files.createDirectories(applicationSettingsDirectory);
+        Path applicationConfiguration = applicationSettingsDirectory
+                .resolve(CONFIGURATION_FILE_NAME);
+
+        if (!Files.exists(applicationConfiguration)) {
+            try {
+                Files.write(
+                        applicationConfiguration,
+                        factoryBytes,
+                        StandardOpenOption.CREATE_NEW,
+                        StandardOpenOption.WRITE);
+            } catch (FileAlreadyExistsException ignored) {
+                // Another startup created the initial copy first.
+            }
         }
 
-        try (InputStream user = Files.newInputStream(userFile)) {
-            JsonNode document = read(user, true);
-            Parsed preferences = parse(document, loader, defaults);
-            config.applyUserConfiguration(preferences);
+        return applicationConfiguration;
+    }
+
+    private SavedConfiguration readSavedConfiguration(
+            ClassLoader loader,
+            Path applicationConfiguration) {
+
+        try (InputStream applicationInput = Files.newInputStream(applicationConfiguration)) {
+            JsonNode document = read(applicationInput);
+            Parsed savedConfiguration = parse(document, loader);
+
+            return new SavedConfiguration(savedConfiguration, null);
         } catch (IOException | IllegalArgumentException exception) {
-            config.resetToDefaults();
-            config.setLoadWarning(
-                    "User preferences were preserved but not applied: "
-                            + exception.getMessage());
+            String warning = "Application configuration was preserved but not applied; "
+                    + "the factory configuration was loaded: "
+                    + exception.getMessage();
+
+            return new SavedConfiguration(null, warning);
         }
     }
 
-    private static JsonNode read(InputStream input, boolean preferences)
-            throws IOException {
+    private static JsonNode read(InputStream input) throws IOException {
 
         JsonNode document = JSON.readTree(input);
-        validate(document, preferences);
+        validate(document);
 
         return document;
     }
 
     /**
-     * Validates a document against the schema for defaults or user preferences.
+     * Validates a complete application configuration against its bundled schema.
      */
-    private static void validate(JsonNode document, boolean preferences)
-            throws IOException {
+    private static void validate(JsonNode document) throws IOException {
 
-        String resource = preferences
-                ? "/command-preferences-schema.json"
-                : "/swing-command-schema.json";
+        String resource = "/swing-command-schema.json";
 
         try (InputStream input = ConfigurationManager.class.getResourceAsStream(resource)) {
             if (input == null) {
@@ -266,49 +295,38 @@ public final class ConfigurationManager {
         final Map<Command, Icon> factoryIcons = new IdentityHashMap<>();
     }
 
+    private record SavedConfiguration(Parsed parsed, String warning) {
+    }
+
     /**
-     * Builds resource models and property maps from defaults or a preference overlay.
-     *
-     * @param defaults {@code null} when parsing application defaults; otherwise the parsed
-     *                 defaults that user preferences modify
+     * Builds resource models and property maps from a complete configuration document.
      */
-    private static Parsed parse(JsonNode document, ClassLoader loader, Parsed defaults)
+    private static Parsed parse(JsonNode document, ClassLoader loader)
             throws IOException {
 
         try {
-            boolean userPreferences = defaults != null;
             Parsed parsed = new Parsed();
 
-            parsed.name = userPreferences
-                    ? defaults.name
-                    : document.path("name").asText("Application");
-
-            if (userPreferences) {
-                parsed.commandsById.putAll(defaults.commandsById);
-            }
+            parsed.name = document.path("name").asText("Application");
 
             parsed.commands = new ResourceModel(
                     ResourceModel.Type.COMMAND,
                     new ResourceNode(Kind.ROOT, "Commands"));
 
-            readCommands(document, loader, parsed, userPreferences);
-
-            if (userPreferences) {
-                parsed.commands.replaceWith(defaults.commands.getRoot().copy());
-            }
+            readCommands(document, loader, parsed);
 
             parsed.menus = readModel(
                     document,
                     "menus",
                     ResourceModel.Type.MENU,
                     parsed,
-                    userPreferences ? defaults.menus : null);
+                    null);
             parsed.toolbars = readModel(
                     document,
                     "toolbars",
                     ResourceModel.Type.TOOLBAR,
                     parsed,
-                    userPreferences ? defaults.toolbars : null);
+                    null);
 
             validateShortcutsAndIcons(parsed);
             Configuration.validateGroups(parsed.menus, parsed.toolbars);
@@ -324,8 +342,7 @@ public final class ConfigurationManager {
     private static void readCommands(
             JsonNode document,
             ClassLoader loader,
-            Parsed parsed,
-            boolean userPreferences) throws ClassNotFoundException {
+            Parsed parsed) throws ClassNotFoundException {
 
         Iterator<Map.Entry<String, JsonNode>> entries =
                 document.path("commands").fields();
@@ -334,20 +351,17 @@ public final class ConfigurationManager {
             Map.Entry<String, JsonNode> entry = entries.next();
             String id = entry.getKey();
             JsonNode definition = entry.getValue();
-            Command command = resolveCommand(id, definition, loader, parsed, userPreferences);
+            Command command = resolveCommand(id, definition, loader, parsed);
 
             Map<String, String> properties = readCommandProperties(
                     id,
                     definition,
                     command,
-                    parsed,
-                    userPreferences);
+                    parsed);
 
             parsed.properties.put(command, properties);
 
-            if (!userPreferences) {
-                addCommandNode(parsed.commands, definition, command);
-            }
+            addCommandNode(parsed.commands, definition, command);
         }
     }
 
@@ -355,19 +369,7 @@ public final class ConfigurationManager {
             String id,
             JsonNode definition,
             ClassLoader loader,
-            Parsed parsed,
-            boolean userPreferences) throws ClassNotFoundException {
-
-        if (userPreferences) {
-            Command command = parsed.commandsById.get(id);
-
-            if (command == null) {
-                throw new IllegalArgumentException(
-                        "$.commands." + id + ": unknown command ID");
-            }
-
-            return command;
-        }
+            Parsed parsed) throws ClassNotFoundException {
 
         Class<? extends Command> type = Class
                 .forName(definition.get("class").asText(), false, loader)
@@ -388,14 +390,11 @@ public final class ConfigurationManager {
             String id,
             JsonNode definition,
             Command command,
-            Parsed parsed,
-            boolean userPreferences) {
+            Parsed parsed) {
 
         Map<String, String> properties = new LinkedHashMap<>();
 
-        if (!userPreferences) {
-            addFactoryProperties(command, properties, parsed);
-        }
+        addFactoryProperties(command, properties, parsed);
 
         List<String> fields = List.of("label", "tooltip", "shortcut", "icon", "enabled");
 
@@ -715,20 +714,20 @@ public final class ConfigurationManager {
     }
 
     /**
-     * Serializes user overrides, validates them, and replaces the preferences file.
+     * Serializes the complete live configuration and safely replaces the application configuration file.
      *
      * <p>An existing file is copied to a {@code .bak} sibling before replacement.
      * The temporary file is moved atomically when the file system supports it.</p>
      *
-     * @param config live configuration whose user changes should be saved
-     * @param path destination for the preferences JSON
+     * @param config live configuration to save
+     * @param path destination for the complete configuration JSON
      * @throws IOException if validation or file operations fail
      */
     static void save(Configuration config, Path path) throws IOException {
 
-        ObjectNode document = createPreferencesDocument(config);
-        validate(document, true);
-        validatePreferenceSemantics(document, config);
+        ObjectNode document = createConfigurationDocument(config);
+        validate(document);
+        validateConfigurationSemantics(document, config);
 
         Path target = path.toAbsolutePath();
         Path parent = target.getParent();
@@ -738,78 +737,109 @@ public final class ConfigurationManager {
         Path temp = Files.createTempFile(parent, "commands-", ".tmp");
 
         try {
-            writePreferences(document, target, temp);
+            writeConfiguration(document, target, temp);
         } finally {
             Files.deleteIfExists(temp);
         }
     }
 
-    private static ObjectNode createPreferencesDocument(Configuration config) {
+    private static ObjectNode createConfigurationDocument(Configuration config) {
 
         ObjectNode document = JSON.createObjectNode();
-        document.put("$schema", "command-preferences-schema.json");
+        document.put("$schema", "swing-command-schema.json");
         document.put("version", 1);
+        document.put("name", config.getName());
 
         ObjectNode commands = document.putObject("commands");
+        Map<Command, String> categories = commandCategories(config.getCommandModel().getRoot());
 
         for (Command command : config.getCommands()) {
-            Map<String, String> overrides = config.presentationOverrides(command);
+            ObjectNode properties = commands.putObject(config.commandId(command));
+            properties.put("class", command.getClass().getName());
 
-            if (!overrides.isEmpty()) {
-                ObjectNode properties = commands.putObject(config.commandId(command));
+            String category = categories.get(command);
+            if (category != null) {
+                properties.put("category", category);
+            }
 
-                for (Map.Entry<String, String> override : overrides.entrySet()) {
-                    String key = override.getKey();
-                    String value = override.getValue();
+            String label = Objects.toString(command.getName(), command.getClass().getSimpleName());
+            properties.put("label", label);
+            properties.put("tooltip", Objects.toString(command.getToolTip(), ""));
+            properties.put("enabled", command.isEnabled());
 
-                    if (value == null) {
-                        properties.putNull(key);
-                    } else {
-                        properties.put(key, value);
-                    }
-                }
+            if (command instanceof BooleanCommand booleanCommand) {
+                properties.put("selected", booleanCommand.isSelected());
+            }
+
+            if (command.getKeyBinding() == null) {
+                properties.putNull("shortcut");
+            } else {
+                properties.put("shortcut", command.getKeyBinding().toString());
+            }
+
+            if (command.getIconResource() != null) {
+                properties.put("icon", command.getIconResource());
+            } else if (config.presentationOverrides(command).containsKey("icon")) {
+                properties.putNull("icon");
             }
         }
 
         ArrayNode menus = writeChildren(config.getMenuModel().getRoot(), config);
         ArrayNode toolbars = writeChildren(config.getToolbarModel().getRoot(), config);
-        ArrayNode defaultMenus = writeChildren(config.defaultMenus(), config);
-        ArrayNode defaultToolbars = writeChildren(config.defaultToolbars(), config);
-
-        if (!menus.equals(defaultMenus)) {
-            document.set("menus", menus);
-        }
-
-        if (!toolbars.equals(defaultToolbars)) {
-            document.set("toolbars", toolbars);
-        }
+        document.set("menus", menus);
+        document.set("toolbars", toolbars);
 
         return document;
     }
 
-    private static void validatePreferenceSemantics(
+    private static Map<Command, String> commandCategories(ResourceNode root) {
+
+        Map<Command, String> categories = new IdentityHashMap<>();
+        collectCommandCategories(root, null, categories);
+
+        return categories;
+    }
+
+    private static void collectCommandCategories(
+            ResourceNode parent,
+            String category,
+            Map<Command, String> categories) {
+
+        String childCategory = parent.getKind() == Kind.GROUP
+                ? parent.getName()
+                : category;
+
+        for (int i = 0; i < parent.getChildCount(); i++) {
+            ResourceNode child = parent.getChildAt(i);
+
+            if (child.getKind() == Kind.COMMAND) {
+                if (childCategory != null) {
+                    categories.put(child.getCommand(), childCategory);
+                }
+            } else {
+                collectCommandCategories(child, childCategory, categories);
+            }
+        }
+    }
+
+    private static void validateConfigurationSemantics(
             ObjectNode document,
             Configuration config) throws IOException {
 
-        // Validate semantics before replacing a previously working file.
-        Parsed base = new Parsed();
-        base.name = config.getName();
+        ClassLoader loader = ConfigurationManager.class.getClassLoader();
 
         for (Command command : config.getCommands()) {
-            base.commandsById.put(config.commandId(command), command);
+            loader = command.getClass().getClassLoader();
+            break;
         }
 
-        base.commands = config.getCommandModel();
-        base.menus = config.getMenuModel();
-        base.toolbars = config.getToolbarModel();
-
-        parse(document, ConfigurationManager.class.getClassLoader(), base);
+        parse(document, loader);
     }
 
     /**
-     * Writes a temporary preferences file and safely replaces the destination.
+     * Writes a temporary configuration file and safely replaces the destination.
      */
-    private static void writePreferences(
+    private static void writeConfiguration(
             ObjectNode document,
             Path target,
             Path temp) throws IOException {

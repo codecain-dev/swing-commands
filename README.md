@@ -1,6 +1,6 @@
 # Swing Commands
 
-Swing Commands is a Java 17 library for defining application commands once and reusing them across Swing menus, toolbars, and keyboard shortcuts. It keeps command behavior in the host application while managing shared presentation state, configurable layouts, and user preferences.
+Swing Commands is a Java 17 library for defining application commands once and reusing them across Swing menus, toolbars, and keyboard shortcuts. It keeps command behavior in the host application while managing shared presentation state and configurable layouts.
 
 A command can appear in several parts of the interface and still represent the same operation. Change its name, icon, enabled state, or shortcut once; each presenter reflects that state. Describe the application's default command catalog and layout in JSON, then let users customize menus, toolbars, and shortcuts without changing application code.
 
@@ -10,7 +10,7 @@ A command can appear in several parts of the interface and still represent the s
 - Reuse each command in menus, popup menus, toolbars, buttons, and panels.
 - Assign shortcuts and keep them synchronized with command state.
 - Configure command catalogs and default layouts with validated JSON.
-- Save user presentation and layout preferences separately from application defaults.
+- Save a complete per-user command configuration separately from the factory configuration.
 - Support callback commands, commands with built-in behavior, and shared boolean selection state.
 - Include a standalone editor for application defaults and a runtime customizer for end users.
 
@@ -31,7 +31,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'dev.codecain:swing-commands:x.y.z'
+    implementation 'dev.codecain:swing-commands:[version]'
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 <dependency>
     <groupId>dev.codecain</groupId>
     <artifactId>swing-commands</artifactId>
-    <version>x.y.z</version>
+    <version>[version]</version>
 </dependency>
 ```
 
@@ -111,8 +111,7 @@ import dev.codecain.swing.commands.config.ConfigurationManager;
 
 Configuration configuration = ConfigurationManager.getDefault().install(
         MyApplication.class,
-        "/commands.json",
-        Path.of("my-application.user.json"));
+        Path.of(System.getProperty("user.home"), ".my-application"));
 
 configuration.getCommand(SaveCommand.class)
         .setCommandPerformer((command, event) -> saveDocument());
@@ -128,7 +127,7 @@ Close the configuration when its window is disposed:
 configuration.close();
 ```
 
-Run configuration loading, UI updates, and command callbacks on Swing's event dispatch thread. The configuration loader creates command classes using no-argument constructors. Keep command IDs stable because layouts and saved preferences refer to them by ID.
+Run configuration loading, UI updates, and command callbacks on Swing's event dispatch thread. The configuration loader creates command classes using no-argument constructors. Keep command IDs stable because layouts and saved configurations refer to them by ID.
 
 ## How it works
 
@@ -138,21 +137,20 @@ A command is the shared application operation and presentation state. Its presen
 - `CallbackCommand` subclasses receive host behavior through a `CommandPerformer`.
 - `BooleanCommand` and `BooleanCallbackCommand` add selected state for toggle controls.
 
-`ConfigurationManager` loads and validates application defaults, applies saved user preferences when available, and creates a live `Configuration`. The configuration builds the menu and toolbar components and installs shortcuts on a window's `JRootPane`. Menu and toolbar layouts are available as `ResourceModel` instances for Swing tree views and supported model edits.
+Place the factory configuration at `src/main/resources/swing-commands.json`. `ConfigurationManager` uses the anchor class to find that standard classpath resource, copies it to the application settings directory on first run, and loads the copy as the active configuration. The host application chooses the settings directory (for example, `$HOME/.wasp`); the persisted filename is always `swing-commands.json`. The factory configuration remains the reset baseline. The configuration builds menu and toolbar components and installs shortcuts on a window's `JRootPane`. Menu and toolbar layouts are available as `ResourceModel` instances for Swing tree views and supported model edits.
 
-## Configuration and preferences
+## Configuration files
 
 The application defaults describe registered commands and their initial menus and toolbars. Optional command properties include `label`, `tooltip`, `shortcut`, `icon`, `enabled`, and `selected` for boolean commands. Keyboard shortcuts use Swing `KeyStroke` syntax, for example `ctrl pressed S`.
 
-The library validates JSON structure and configuration semantics, including command IDs, command classes, shortcut conflicts, exclusive toggle groups, and dropdown defaults. The three schema resources are:
+The library validates JSON structure and configuration semantics, including command IDs, command classes, shortcut conflicts, exclusive toggle groups, and dropdown defaults. The schema resources are:
 
-- `swing-command-schema.json` for application defaults
-- `command-preferences-schema.json` for saved user preferences
+- `swing-command-schema.json` for both factory and saved user configurations
 - `command-layout-schema.json` for shared menu and toolbar definitions
 
 For JSON Schema support in an IDE, keep these resources beside the configuration file referenced by `$schema`. Runtime validation uses the schemas bundled with the library.
 
-User preferences contain presentation overrides and customized layouts. Omitted values inherit application defaults, so application updates can flow through to users. A customized menu or toolbar is saved as a complete layout section. Invalid preferences are ignored as a whole, leaving defaults active; `Configuration.getLoadWarning()` reports why they were rejected.
+The application file is a complete configuration, including command registrations, presentation properties, menus, and toolbars. It is loaded as the active configuration rather than merged with factory values. Customizations are saved to this file. Invalid application configurations are preserved and ignored as a whole; the factory configuration remains active for that run, and `Configuration.getLoadWarning()` reports why the saved file was rejected.
 
 Use `Configuration.setKeyBinding` when changing shortcuts programmatically so conflicts can be checked. Close a configuration before installing another one that uses the same command classes; command instances are shared by class.
 
@@ -170,7 +168,7 @@ To open a configuration file directly:
 .\gradlew.bat runEditor -PconfigFile=C:/path/to/commands.json
 ```
 
-At runtime, `ConfigurationCustomizerDialog` lets users change registered command presentation, menus, toolbars, and shortcuts. It saves user preferences; it does not add Java commands or change their behavior.
+At runtime, `ConfigurationCustomizerDialog` lets users change registered command presentation, menus, toolbars, and shortcuts. Save writes the complete configuration to the application's user settings folder; it does not add Java commands or change their behavior.
 
 ## Fat JAR
 

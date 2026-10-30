@@ -46,9 +46,9 @@ public final class IntegrationTest {
         }
     }
 
-    private static Configuration install(Path userFile) throws IOException {
+    private static Configuration install(Path applicationSettingsDirectory) throws IOException {
 
-        return new ConfigurationManager().install(Demo.class, "/demo.json", userFile);
+        return new ConfigurationManager().install(Demo.class, applicationSettingsDirectory);
     }
 
     public static void main(String[] args) throws Exception {
@@ -69,13 +69,13 @@ public final class IntegrationTest {
     private static void exercise() throws Exception {
 
         Path directory = Files.createTempDirectory("swing-commands-test-");
-        Path userFile = directory.resolve("user.json");
+        Path userFile = directory.resolve(ConfigurationManager.CONFIGURATION_FILE_NAME);
         var run = Command.get(Demo.Hello.class);
         var flag = Command.get(Demo.Grid.class);
         int initialListeners = run.getPropertyChangeListeners().length;
 
         try {
-            try (Configuration configuration = install(userFile)) {
+            try (Configuration configuration = install(directory)) {
                 check(run == configuration.getCommand(Demo.Hello.class), "Shared identity");
                 JTree tree = new JTree(configuration.getMenuModel());
                 check(tree.getModel() == configuration.getMenuModel(), "Direct JTree model");
@@ -148,9 +148,11 @@ public final class IntegrationTest {
                         run,
                         KeyStroke.getKeyStroke("ctrl pressed T"),
                         false);
-                configuration.saveUserLayout();
-                configuration.saveUserLayout();
-                check(Files.exists(directory.resolve("user.json.bak")), "Backup exists");
+                configuration.saveUserConfiguration();
+                configuration.saveUserConfiguration();
+                check(Files.exists(directory.resolve(
+                        ConfigurationManager.CONFIGURATION_FILE_NAME + ".bak")),
+                        "Backup exists");
 
                 var model = configuration.getMenuModel();
                 configuration.resetToDefaults();
@@ -160,7 +162,7 @@ public final class IntegrationTest {
                 check(run.getName().equals("Say Hello"), "Reset metadata");
             }
 
-            try (Configuration configuration = install(userFile)) {
+            try (Configuration configuration = install(directory)) {
                 check(configuration.getLoadWarning().isEmpty(), "Saved JSON loads");
                 check(run.getName().equals("Run & <inspect>"), "Escaped metadata roundtrip");
                 check(run.getKeyBinding().equals(KeyStroke.getKeyStroke("ctrl pressed T")),
@@ -174,7 +176,7 @@ public final class IntegrationTest {
             String invalid = "{\"version\":1,\"menus\":[{\"label\":\"Bad\","
                     + "\"mnemonic\":\"invalid\",\"items\":[]}]}";
             Files.writeString(userFile, invalid);
-            try (Configuration configuration = install(userFile)) {
+            try (Configuration configuration = install(directory)) {
                 check(configuration.getLoadWarning().isPresent(), "Invalid mnemonic rejected");
                 check(configuration.getMenuBar().getMenu(0).getText().equals("Commands"),
                         "Factory fallback");
@@ -184,13 +186,13 @@ public final class IntegrationTest {
             Files.writeString(userFile,
                     "{\"version\":1,\"commands\":{\"app.hello\":{\"class\":"
                             + "\"java.lang.Runtime\"}}}");
-            try (Configuration configuration = install(userFile)) {
+            try (Configuration configuration = install(directory)) {
                 check(configuration.getLoadWarning().isPresent(),
                         "User class injection rejected");
             }
 
             Files.writeString(userFile, "{\"version\":1,\"version\":2}");
-            try (Configuration configuration = install(userFile)) {
+            try (Configuration configuration = install(directory)) {
                 check(configuration.getLoadWarning().isPresent(), "Duplicate JSON keys rejected");
             }
 
@@ -200,7 +202,8 @@ public final class IntegrationTest {
             run.setCommandPerformer(null);
             flag.setCommandPerformer(null);
             Files.deleteIfExists(userFile);
-            Files.deleteIfExists(directory.resolve("user.json.bak"));
+            Files.deleteIfExists(directory.resolve(
+                    ConfigurationManager.CONFIGURATION_FILE_NAME + ".bak"));
             Files.deleteIfExists(directory);
         }
     }

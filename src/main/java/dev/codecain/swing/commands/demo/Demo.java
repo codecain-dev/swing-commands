@@ -16,7 +16,7 @@ import dev.codecain.swing.commands.config.*;
 import dev.codecain.swing.commands.customize.ConfigurationCustomizerDialog;
 
 /**
- * Run with Gradle 'run'. User settings stay in the working directory.
+ * Run with Gradle 'run'. The user's full configuration is stored in their home directory.
  */
 public final class Demo {
 
@@ -73,7 +73,12 @@ public final class Demo {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             try {
-                Configuration config = ConfigurationManager.getDefault().install(Demo.class, "/demo.json", Path.of("demo.user.json"));
+                Path applicationSettingsDirectory = Path.of(
+                        System.getProperty("user.home"),
+                        ".swingcommands");
+                Configuration config = ConfigurationManager.getDefault().install(
+                        Demo.class,
+                        applicationSettingsDirectory);
                 JFrame frame = new JFrame("SwingCommands v2 — JSON → ResourceModel → JTree");
                 frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
                 JTextArea log = new JTextArea("The trees below are the actual configuration models.\nTry Ctrl+H, Ctrl+G, and Customize.\n");
