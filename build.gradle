@@ -50,6 +50,12 @@ signing {
     sign(publishing.publications.mavenJava)
 }
 
+tasks.withType(Sign).configureEach {
+    onlyIf("Maven Local publications do not require signatures") {
+        !gradle.taskGraph.hasTask("publishToMavenLocal")
+    }
+}
+
 repositories { mavenCentral() }
 java {
     toolchain {
