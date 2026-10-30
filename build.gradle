@@ -52,7 +52,7 @@ signing {
 
 tasks.withType(Sign).configureEach {
     onlyIf("Maven Local publications do not require signatures") {
-        !gradle.taskGraph.hasTask("publishToMavenLocal")
+        !gradle.taskGraph.allTasks.any { it.name == "publishToMavenLocal" }
     }
 }
 
