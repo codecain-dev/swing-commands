@@ -1,7 +1,49 @@
+# Gradle
 .gradle/
-build/
+**/build/
+!**/src/**/build/
+gradle-app.setting
+.gradletasknamecache
+
+# Java build output
+*.class
+target/
+
+# IntelliJ IDEA (keep shareable project settings)
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries/
+.idea/**/shelf/
+.idea/**/aws.xml
+.idea/**/contentModel.xml
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/gradle.xml
+.idea/**/libraries/
+.idea/**/httpRequests/
+.idea/**/caches/
+.idea_modules/
+*.iml
+*.iws
+out/
+
+# Eclipse metadata and Gradle-generated project files
+.metadata/
+.settings/
+.classpath
+.project
+.loadpath
+.recommenders/
+.externalToolBuilders/
+*.launch
+
+# Application and local backup files
 *.user.xml
 *.bak
 *.user.json
-.idea/
 backup/

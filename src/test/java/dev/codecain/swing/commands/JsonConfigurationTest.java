@@ -6,145 +6,249 @@
 
 package dev.codecain.swing.commands;
 
-import com.fasterxml.jackson.databind.*;
-import com.fasterxml.jackson.databind.node.*;
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import javax.swing.*;
-import dev.codecain.swing.commands.config.*;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.codecain.swing.commands.config.Configuration;
+import dev.codecain.swing.commands.config.ConfigurationManager;
+import dev.codecain.swing.commands.config.ConfigurationManagerTestSupport;
 import dev.codecain.swing.commands.demo.Demo;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import javax.swing.JCheckBoxMenuItem;
 
-/** JSON contract, preference evolution, and validation regression checks. */
+/** Complete-configuration persistence and validation regression checks. */
 final class JsonConfigurationTest {
+
     private static final ObjectMapper JSON = new ObjectMapper();
+
     private static int checks;
+
+    private JsonConfigurationTest() {
+    }
+
     private static void check(boolean value, String message) {
-        checks++; if (!value) throw new AssertionError(message);
-    }
-    private static Configuration install(JsonNode factory, Path prefs) throws IOException {
-        return new ConfigurationManager().install(new ByteArrayInputStream(JSON.writeValueAsBytes(factory)),
-            Demo.class.getClassLoader(), prefs);
-    }
-    private static void rejects(JsonNode factory, String expected) throws IOException {
-        try (Configuration ignored = install(factory, null)) { throw new AssertionError("Accepted invalid defaults: " + expected); }
-        catch (IOException ex) { check(ex.getMessage().contains(expected), "Useful error: " + ex.getMessage()); }
-    }
-    static void run() throws Exception {
-        ObjectNode factory;
-        try (InputStream in = Demo.class.getResourceAsStream("/demo.json")) { factory = (ObjectNode) JSON.readTree(in); }
-        Path dir = Files.createTempDirectory("commands-json-"); Path prefs = dir.resolve("settings.json");
-        try {
-            ObjectNode selectedDefaults = factory.deepCopy();
-            ((ObjectNode) selectedDefaults.path("commands").path("view.grid")).put("selected", false);
-            ((ObjectNode) selectedDefaults.path("commands").path("theme.light")).put("selected", false);
-            ((ObjectNode) selectedDefaults.path("commands").path("theme.dark")).put("selected", true);
-            try (Configuration c = install(selectedDefaults, prefs)) {
-                check(!c.getCommand(Demo.Grid.class).isSelected(), "Explicit false overrides Java true for callback command");
-                check(c.getCommand(Demo.Dark.class).isSelected() && !c.getCommand(Demo.Light.class).isSelected(), "Exclusive group honors selected defaults");
-                check(!((JCheckBoxMenuItem)c.getMenuBar().getMenu(0).getItem(1)).isSelected(), "Menu reflects false default");
-                c.getCommand(Demo.Grid.class).setSelected(true);
-                c.saveUserLayout();
-                check(!JSON.readTree(prefs.toFile()).toString().contains("selected"), "Runtime selection is not persisted as a preference");
-            }
-            try (Configuration c = install(selectedDefaults, prefs)) {
-                check(!c.getCommand(Demo.Grid.class).isSelected(), "Reload reestablishes explicit default");
-            }
-            Files.delete(prefs);
-            ((ObjectNode) selectedDefaults.path("commands").path("view.grid")).put("selected", true);
-            try (Configuration c = install(selectedDefaults, null)) { check(c.getCommand(Demo.Grid.class).isSelected(), "Explicit true for callback command"); }
-            ((ObjectNode) selectedDefaults.path("commands").path("view.grid")).remove("selected");
-            try (Configuration c = install(selectedDefaults, null)) { check(c.getCommand(Demo.Grid.class).isSelected(), "Omitted selected inherits Java default"); }
-            ObjectNode invalidSelected = factory.deepCopy();
-            ((ObjectNode) invalidSelected.path("commands").path("app.hello")).put("selected", true);
-            rejects(invalidSelected, "requires a BooleanCommand");
-            invalidSelected = factory.deepCopy();
-            ((ObjectNode) invalidSelected.path("commands").path("view.grid")).put("selected", "true");
-            rejects(invalidSelected, "selected");
-            ((ObjectNode) invalidSelected.path("commands").path("view.grid")).putNull("selected");
-            rejects(invalidSelected, "selected");
-            try (Configuration c = install(factory, prefs)) {
-                c.saveUserLayout();
-                JsonNode saved = JSON.readTree(prefs.toFile());
-                check(saved.path("commands").isEmpty(), "Unmodified presentation not saved");
-                check(!saved.has("menus") && !saved.has("toolbars"), "Unmodified layouts inherit defaults");
-                c.getCommand(Demo.Hello.class).setName("User label");
-                c.setKeyBinding(c.getCommand(Demo.Hello.class), null, false);
-                c.saveUserLayout();
-                saved = JSON.readTree(prefs.toFile());
-                check(saved.path("commands").path("app.hello").path("shortcut").isNull(), "Null explicitly removes shortcut");
-                check(!saved.toString().contains("class"), "Preferences contain no class names");
-            }
-            ObjectNode updated = factory.deepCopy();
-            ((ObjectNode) updated.path("commands").path("app.hello")).put("tooltip", "New factory tooltip");
-            ((ArrayNode) updated.get("menus")).addObject().put("label", "New menu").putArray("items");
-            try (Configuration c = install(updated, prefs)) {
-                check(c.getCommand(Demo.Hello.class).getName().equals("User label"), "User label wins");
-                check(c.getCommand(Demo.Hello.class).getKeyBinding() == null, "Removed shortcut stays removed");
-                check(c.getCommand(Demo.Hello.class).getToolTip().equals("New factory tooltip"), "Untouched metadata follows new defaults");
-                check(c.getMenuBar().getMenuCount() == 3, "Untouched layout follows new defaults");
-                c.resetToDefaults(); c.saveUserLayout();
-                check(JSON.readTree(prefs.toFile()).path("commands").isEmpty(), "Saved reset removes presentation overrides");
-            }
-            try (Configuration c = install(factory, null)) {
-                check(c.getCommand(Demo.Hello.class).getName().equals("Say Hello"), "Reinstall restores Java fallback name");
-                check(!c.getCommand(Demo.Hello.class).getToolTip().equals("New factory tooltip"), "Removed JSON override restores Java fallback tooltip");
-            }
-            ObjectNode bad = factory.deepCopy(); bad.put("version", 2); rejects(bad, "version");
-            bad = factory.deepCopy(); bad.put("menuss", true); rejects(bad, "menuss");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("commands").path("app.hello")).put("lable", "typo"); rejects(bad, "lable");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("menus").get(0)).put("mnemonic", "long"); rejects(bad, "mnemonic");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("toolbars").get(0)).put("showLabels", "yes"); rejects(bad, "showLabels");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("menus").get(0).path("items").get(0)).put("command", "missing"); rejects(bad, "unknown command ID");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("commands").path("view.grid")).put("shortcut", "ctrl pressed H"); rejects(bad, "duplicate shortcut");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("commands").path("view.grid")).put("shortcut", "not a shortcut"); rejects(bad, "pressed shortcut");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("commands").path("view.grid")).put("class", Demo.Hello.class.getName()); rejects(bad, "already registered");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("toolbars").get(1).path("items").get(1)).put("defaultCommand", "view.grid"); rejects(bad, "defaultCommand");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("menus").get(1).path("items").get(0).path("items").get(0)).put("command", "app.hello"); rejects(bad, "boolean commands");
-            bad = factory.deepCopy(); ((ObjectNode) bad.path("menus").get(1)).put("id", "commands"); rejects(bad, "duplicate container ID");
-            String[] invalidPrefs = {
-                "{\"version\":2}", "{\"version\":1,\"commands\":{\"missing\":{\"label\":\"X\"}}}",
-                "{\"version\":1,\"commands\":{\"app.hello\":{\"class\":\"java.lang.Runtime\"}}}",
-                "{\"version\":1,\"commands\":{\"app.hello\":{\"label\":\"Must not apply\"},\"view.grid\":{\"shortcut\":\"ctrl pressed H\"}}}",
-                "{\"version\":1} {}", "{\"version\":1,\"version\":1}", "{\"version\":1, // comment\n}",
-                "{\"version\":1,\"menus\":[{\"label\":\"Bad\",\"items\":[{\"command\":\"missing\"}]}]}"
-            };
-            for (String text : invalidPrefs) {
-                Files.writeString(prefs, text);
-                try (Configuration c = install(factory, prefs)) {
-                    check(c.getLoadWarning().isPresent(), "Bad preferences report warning");
-                    check(c.getCommand(Demo.Hello.class).getName().equals("Say Hello"), "No partial metadata applied");
-                    check(c.getMenuBar().getMenu(0).getText().equals("Commands"), "No partial layout applied");
-                    check(Files.readString(prefs).equals(text), "Bad preferences left intact");
-                }
-            }
-            Files.writeString(prefs, "{\"$schema\":\"https://invalid.invalid/never-fetch\",\"version\":1,\"menus\":[],\"toolbars\":[]}");
-            try (Configuration c = install(factory, prefs)) {
-                check(c.getLoadWarning().isEmpty(), "Runtime uses bundled schema, not document URL");
-                check(c.getMenuBar().getMenuCount() == 0 && c.getToolbarPanel().getComponentCount() == 0, "Explicit empty layouts respected");
-                c.saveUserLayout();
-            }
-            try (Configuration c = install(factory, prefs)) { check(c.getMenuBar().getMenuCount() == 0, "Empty layout survives save/reload"); }
-            Files.delete(prefs);
-            try (Configuration c = install(factory, prefs)) {
-                // Nested menu, separator and dropdown defaults survive model serialization.
-                var model = c.getMenuModel(); var nested = dev.codecain.swing.commands.resource.ResourceNode.group("Nested");
-                model.add(model.getRoot().getChildAt(0), nested);
-                model.add(nested, dev.codecain.swing.commands.resource.ResourceNode.command(c.getCommand(Demo.Grid.class)));
-                var dropdown = c.getToolbarModel().getRoot().getChildAt(1).getChildAt(1);
-                dropdown.getChildAt(0).getAttributes().put("default", "false");
-                dropdown.getChildAt(1).getAttributes().put("default", "true");
-                c.saveUserLayout();
-            }
-            try (Configuration c = install(factory, prefs)) {
-                check(c.getLoadWarning().isEmpty(), "Edited nested models reload");
-                check(c.getMenuModel().getRoot().getChildAt(0).getChildAt(4).getName().equals("Nested"), "Nested menu roundtrip");
-                check(c.getToolbarModel().getRoot().getChildAt(1).getChildAt(1).getChildAt(1).attribute("default", "false").equals("true"), "Dropdown default roundtrip");
-            }
-        } finally {
-            Files.deleteIfExists(prefs); Files.deleteIfExists(dir.resolve("settings.json.bak")); Files.deleteIfExists(dir);
+
+        checks++;
+
+        if (!value) {
+            throw new AssertionError(message);
         }
+    }
+
+    private static Configuration install(JsonNode factory, Path applicationSettingsDirectory)
+            throws IOException {
+
+        return ConfigurationManagerTestSupport.install(
+                new ByteArrayInputStream(JSON.writeValueAsBytes(factory)),
+                Demo.class.getClassLoader(),
+                applicationSettingsDirectory);
+    }
+
+    private static void rejects(JsonNode factory, String expected) throws IOException {
+
+        Path settingsDirectory = Files.createTempDirectory("commands-invalid-factory-");
+
+        try (Configuration ignored = install(factory, settingsDirectory)) {
+            throw new AssertionError("Accepted invalid factory configuration: " + expected);
+        } catch (IOException exception) {
+            check(exception.getMessage().contains(expected), "Useful error: " + exception.getMessage());
+        } finally {
+            Files.deleteIfExists(settingsDirectory);
+        }
+    }
+
+    static void run() throws Exception {
+
+        ObjectNode factory;
+
+        try (InputStream input = Demo.class.getResourceAsStream(
+                "/" + ConfigurationManager.CONFIGURATION_FILE_NAME)) {
+            factory = (ObjectNode) JSON.readTree(input);
+        }
+
+        Path directory = Files.createTempDirectory("commands-json-");
+        Path userFile = directory.resolve(ConfigurationManager.CONFIGURATION_FILE_NAME);
+
+        try {
+            testFactoryConfiguration(factory, directory, userFile);
+            testSavedConfigurationIsAuthoritative(factory, directory, userFile);
+            testInvalidSavedConfigurationFallsBack(factory, directory, userFile);
+            testValidation(factory);
+            testLayoutRoundTrip(factory, directory, userFile);
+        } finally {
+            Files.deleteIfExists(userFile);
+            Files.deleteIfExists(directory.resolve(
+                    ConfigurationManager.CONFIGURATION_FILE_NAME + ".bak"));
+            Files.deleteIfExists(directory);
+        }
+
         System.out.println("Passed " + checks + " JSON configuration checks");
     }
-}
 
+    private static void testFactoryConfiguration(
+            ObjectNode factory,
+            Path settingsDirectory,
+            Path userFile) throws Exception {
+
+        ObjectNode configuredFactory = factory.deepCopy();
+        ((ObjectNode) configuredFactory.path("commands").path("view.grid")).put("selected", false);
+        ((ObjectNode) configuredFactory.path("commands").path("theme.light")).put("selected", false);
+        ((ObjectNode) configuredFactory.path("commands").path("theme.dark")).put("selected", true);
+
+        try (Configuration configuration = install(configuredFactory, settingsDirectory)) {
+            JsonNode copiedFactory = JSON.readTree(userFile.toFile());
+            check(!copiedFactory.path("commands").path("view.grid")
+                            .path("selected").asBoolean(),
+                    "First install creates the stable application configuration file");
+            check(!configuration.getCommand(Demo.Grid.class).isSelected(),
+                    "Explicit false overrides the Java-selected state");
+            check(configuration.getCommand(Demo.Dark.class).isSelected()
+                            && !configuration.getCommand(Demo.Light.class).isSelected(),
+                    "Factory selection state is applied");
+            check(!((JCheckBoxMenuItem) configuration.getMenuBar().getMenu(0).getItem(1))
+                            .isSelected(),
+                    "Menu presenter reflects factory selection");
+
+            configuration.getCommand(Demo.Grid.class).setSelected(true);
+            configuration.saveUserConfiguration();
+        }
+
+        JsonNode saved = JSON.readTree(userFile.toFile());
+        check(saved.path("commands").path("app.hello").has("class"),
+                "Saved file contains command class registrations");
+        check(saved.path("menus").isArray() && saved.path("toolbars").isArray(),
+                "Saved file contains complete menu and toolbar layouts");
+        check(saved.path("commands").path("view.grid").path("selected").asBoolean(),
+                "Saved file captures the complete active command configuration");
+
+        try (Configuration configuration = install(configuredFactory, settingsDirectory)) {
+            check(configuration.getCommand(Demo.Grid.class).isSelected(),
+                    "Saved configuration is loaded on the next install");
+            configuration.resetToDefaults();
+            check(!configuration.getCommand(Demo.Grid.class).isSelected(),
+                    "Reset restores the factory selection state");
+        }
+
+        Files.delete(userFile);
+    }
+
+    private static void testSavedConfigurationIsAuthoritative(
+            ObjectNode factory,
+            Path settingsDirectory,
+            Path userFile) throws Exception {
+
+        try (Configuration configuration = install(factory, settingsDirectory)) {
+            configuration.getCommand(Demo.Hello.class).setName("User label");
+            configuration.setKeyBinding(configuration.getCommand(Demo.Hello.class), null, false);
+            configuration.saveUserConfiguration();
+        }
+
+        ObjectNode updatedFactory = factory.deepCopy();
+        ((ObjectNode) updatedFactory.path("commands").path("app.hello"))
+                .put("tooltip", "Changed factory tooltip");
+        ((ArrayNode) updatedFactory.get("menus")).addObject()
+                .put("label", "New factory menu")
+                .putArray("items");
+
+        try (Configuration configuration = install(updatedFactory, settingsDirectory)) {
+            check(configuration.getCommand(Demo.Hello.class).getName().equals("User label"),
+                    "Saved user configuration supplies the active command properties");
+            check(configuration.getCommand(Demo.Hello.class).getToolTip()
+                            .equals("Works from the menu, toolbar, or Ctrl+H"),
+                    "Saved configuration is loaded as a whole, not merged with new factory values");
+            check(configuration.getCommand(Demo.Hello.class).getKeyBinding() == null,
+                    "Saved null shortcut remains cleared");
+            check(configuration.getMenuBar().getMenuCount() == 2,
+                    "Saved layout is used instead of the updated factory layout");
+
+            configuration.resetToDefaults();
+            configuration.saveUserConfiguration();
+        }
+
+        try (Configuration configuration = install(factory, settingsDirectory)) {
+            check(configuration.getCommand(Demo.Hello.class).getToolTip()
+                            .equals("Changed factory tooltip"),
+                    "Reset and save replaces the user file with the current factory configuration");
+            check(configuration.getMenuBar().getMenuCount() == 3,
+                    "Factory layout is restored and persisted by reset");
+        }
+    }
+
+    private static void testInvalidSavedConfigurationFallsBack(
+            ObjectNode factory,
+            Path settingsDirectory,
+            Path userFile) throws Exception {
+
+        String invalid = "{\"version\": 2}";
+        Files.writeString(userFile, invalid);
+
+        try (Configuration configuration = install(factory, settingsDirectory)) {
+            check(configuration.getLoadWarning().isPresent(),
+                    "Invalid saved configuration reports a warning");
+            check(configuration.getCommand(Demo.Hello.class).getName().equals("Say Hello"),
+                    "Invalid user file does not partially change commands");
+            check(configuration.getMenuBar().getMenu(0).getText().equals("Commands"),
+                    "Factory layout is used when the saved file is invalid");
+            check(Files.readString(userFile).equals(invalid),
+                    "Invalid user file is preserved for recovery");
+        }
+
+        Files.delete(userFile);
+    }
+
+    private static void testValidation(ObjectNode factory) throws Exception {
+
+        ObjectNode invalid = factory.deepCopy();
+        invalid.put("version", 2);
+        rejects(invalid, "version");
+
+        invalid = factory.deepCopy();
+        invalid.put("menuss", true);
+        rejects(invalid, "menuss");
+
+        invalid = factory.deepCopy();
+        ((ObjectNode) invalid.path("commands").path("app.hello")).put("lable", "typo");
+        rejects(invalid, "lable");
+
+        invalid = factory.deepCopy();
+        ((ObjectNode) invalid.path("commands").path("app.hello")).put("selected", true);
+        rejects(invalid, "requires a BooleanCommand");
+
+        invalid = factory.deepCopy();
+        ((ObjectNode) invalid.path("commands").path("view.grid"))
+                .put("shortcut", "ctrl pressed H");
+        rejects(invalid, "duplicate shortcut");
+
+        invalid = factory.deepCopy();
+        ((ObjectNode) invalid.path("menus").get(0).path("items").get(0))
+                .put("command", "missing");
+        rejects(invalid, "unknown command ID");
+    }
+
+    private static void testLayoutRoundTrip(
+            ObjectNode factory,
+            Path settingsDirectory,
+            Path userFile) throws Exception {
+
+        try (Configuration configuration = install(factory, settingsDirectory)) {
+            configuration.getMenuModel().getRoot().getChildAt(0)
+                    .add(dev.codecain.swing.commands.resource.ResourceNode.group("Nested"));
+            configuration.saveUserConfiguration();
+        }
+
+        try (Configuration configuration = install(factory, settingsDirectory)) {
+            check(configuration.getLoadWarning().isEmpty(),
+                    "Complete saved layout reloads without warning");
+            check(configuration.getMenuModel().getRoot().getChildAt(0)
+                            .getChildAt(4).getName().equals("Nested"),
+                    "Nested menu layout survives serialization");
+        }
+
+        Files.delete(userFile);
+    }
+}

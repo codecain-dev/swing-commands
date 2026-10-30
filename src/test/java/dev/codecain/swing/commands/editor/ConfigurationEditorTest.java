@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.codecain.swing.commands.config.Configuration;
 import dev.codecain.swing.commands.config.ConfigurationManager;
+import dev.codecain.swing.commands.config.ConfigurationManagerTestSupport;
 import dev.codecain.swing.commands.demo.Demo;
 import java.awt.Component;
 import java.awt.Container;
@@ -70,6 +71,7 @@ public final class ConfigurationEditorTest {
 
         Path directory = Files.createTempDirectory("command-editor-");
         Path file = directory.resolve("defaults.json");
+        Path runtimeSettings = directory.resolve("runtime");
 
         try {
             ObjectNode booleanCommand = JsonNodeFactory.instance.objectNode()
@@ -83,7 +85,9 @@ public final class ConfigurationEditorTest {
                             .path("view.grid").path("selected").isBoolean(),
                     "Editor writes selected as a JSON boolean");
 
-            try (Configuration installed = new ConfigurationManager().install(file, null)) {
+            try (Configuration installed = ConfigurationManagerTestSupport.install(
+                    file,
+                    runtimeSettings)) {
                 check(!installed.getCommand(Demo.Grid.class).isSelected(),
                         "Editor false selection loads in runtime");
             }
@@ -124,7 +128,11 @@ public final class ConfigurationEditorTest {
             check(Files.readString(file).contains("\"version\" : 1"), "Save adds version");
             check(!document.dirty(), "Save clears dirty state");
 
-            try (Configuration installed = new ConfigurationManager().install(file, null)) {
+            Files.deleteIfExists(runtimeSettings.resolve(
+                    ConfigurationManager.CONFIGURATION_FILE_NAME));
+            try (Configuration installed = ConfigurationManagerTestSupport.install(
+                    file,
+                    runtimeSettings)) {
                 check(installed.getMenuBar().getMenu(0).getItem(0).getText()
                                 .equals("Hello from editor"),
                         "Editor output loads in runtime");
@@ -182,7 +190,8 @@ public final class ConfigurationEditorTest {
             fails(() -> ConfigurationDocument.open(file));
 
             // Render the editor panel in headless mode for layout inspection.
-            try (var input = Demo.class.getResourceAsStream("/demo.json")) {
+            try (var input = Demo.class.getResourceAsStream(
+                    "/" + ConfigurationManager.CONFIGURATION_FILE_NAME)) {
                 Files.copy(input, file, StandardCopyOption.REPLACE_EXISTING);
             }
 
@@ -226,6 +235,9 @@ public final class ConfigurationEditorTest {
         } finally {
             Files.deleteIfExists(file);
             Files.deleteIfExists(directory.resolve("defaults.json.bak"));
+            Files.deleteIfExists(runtimeSettings.resolve(
+                    ConfigurationManager.CONFIGURATION_FILE_NAME));
+            Files.deleteIfExists(runtimeSettings);
             Files.deleteIfExists(directory);
         }
     }

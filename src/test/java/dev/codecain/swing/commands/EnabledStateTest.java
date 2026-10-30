@@ -14,10 +14,13 @@ import dev.codecain.swing.commands.command.Command;
 import dev.codecain.swing.commands.command.CommandPerformer;
 import dev.codecain.swing.commands.config.Configuration;
 import dev.codecain.swing.commands.config.ConfigurationManager;
+import dev.codecain.swing.commands.config.ConfigurationManagerTestSupport;
 import java.awt.event.ActionEvent;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import javax.swing.AbstractButton;
 import javax.swing.JMenuItem;
@@ -55,7 +58,10 @@ final class EnabledStateTest {
         }
     }
 
-    private static Configuration load(Class<?> type, String enabled) throws IOException {
+    private static Configuration load(
+            Class<?> type,
+            String enabled,
+            Path applicationSettingsDirectory) throws IOException {
 
         String setting = enabled == null ? "" : ",\"enabled\":" + enabled;
         String json = "{\"version\":1,\"commands\":{\"test\":{\"class\":\""
@@ -64,17 +70,23 @@ final class EnabledStateTest {
                 + "\"toolbars\":[{\"label\":\"Main\",\"items\":[{\"command\":\"test\"}]}]}";
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         ByteArrayInputStream input = new ByteArrayInputStream(bytes);
+        Files.deleteIfExists(applicationSettingsDirectory.resolve(
+                ConfigurationManager.CONFIGURATION_FILE_NAME));
 
-        return new ConfigurationManager().install(
+        return ConfigurationManagerTestSupport.install(
                 input,
                 EnabledStateTest.class.getClassLoader(),
-                null);
+                applicationSettingsDirectory);
     }
 
     static void run() throws Exception {
 
+        Path settingsDirectory = Files.createTempDirectory("enabled-state-");
+
+        try {
+
         for (Class<? extends Command> type : List.of(Callback.class, Toggle.class)) {
-            try (Configuration configuration = load(type, "false")) {
+            try (Configuration configuration = load(type, "false", settingsDirectory)) {
                 Command command = configuration.getCommand(type);
                 JMenuItem menuItem = configuration.getMenuBar().getMenu(0).getItem(0);
                 JToolBar toolbar = (JToolBar) configuration.getToolbarPanel().getComponent(0);
@@ -118,34 +130,38 @@ final class EnabledStateTest {
                         "No performer is a safe no-op for callback behavior");
             }
 
-            try (Configuration configuration = load(type, "true")) {
+            try (Configuration configuration = load(type, "true", settingsDirectory)) {
                 check(configuration.getCommand(type).isEnabled(),
                         "Explicit true independent of performer");
             }
 
-            try (Configuration configuration = load(type, null)) {
+            try (Configuration configuration = load(type, null, settingsDirectory)) {
                 check(configuration.getCommand(type).isEnabled(),
                         "Callback Java default is enabled without performer");
             }
         }
 
-        try (Configuration configuration = load(DisabledDefault.class, null)) {
+        try (Configuration configuration = load(
+                DisabledDefault.class, null, settingsDirectory)) {
             check(!configuration.getCommand(DisabledDefault.class).isEnabled(),
                     "Omission inherits Java false");
         }
 
-        try (Configuration configuration = load(DisabledDefault.class, "true")) {
+        try (Configuration configuration = load(
+                DisabledDefault.class, "true", settingsDirectory)) {
             check(configuration.getCommand(DisabledDefault.class).isEnabled(),
                     "Config overrides Java false");
         }
 
-        try (Configuration configuration = load(DisabledDefault.class, null)) {
+        try (Configuration configuration = load(
+                DisabledDefault.class, null, settingsDirectory)) {
             check(!configuration.getCommand(DisabledDefault.class).isEnabled(),
                     "Reload restores inherited Java default");
         }
 
         for (String invalid : List.of("\"false\"", "null", "1")) {
-            try (Configuration configuration = load(Callback.class, invalid)) {
+            try (Configuration configuration = load(
+                    Callback.class, invalid, settingsDirectory)) {
                 throw new AssertionError("Accepted invalid enabled value");
             } catch (IOException expected) {
                 check(expected.getMessage().contains("enabled"),
@@ -154,5 +170,10 @@ final class EnabledStateTest {
         }
 
         System.out.println("Passed " + checks + " enabled-state checks");
+        } finally {
+            Files.deleteIfExists(settingsDirectory.resolve(
+                    ConfigurationManager.CONFIGURATION_FILE_NAME));
+            Files.deleteIfExists(settingsDirectory);
+        }
     }
 }

@@ -74,7 +74,7 @@ public final class ConfigurationCustomizerDialog extends JDialog {
         });
         addButton(buttons, "Save", () -> {
             try {
-                config.saveUserLayout();
+                config.saveUserConfiguration();
                 status.setText("Configuration saved.");
             } catch (IOException | RuntimeException ex) {
                 error(ex);

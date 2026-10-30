@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SwingCommands Layout Definitions",
-  "description": "Shared menu and toolbar definitions for application defaults and user preferences.",
+  "description": "Shared menu and toolbar definitions for factory and saved user configurations.",
   "$defs": {
     "commandRef": {
       "type": "object",

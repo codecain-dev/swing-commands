@@ -37,7 +37,7 @@ public final class Configuration implements AutoCloseable {
     private final ResourceNode defaultToolbars;
 
     private final Map<String, Command> commandsById;
-    private final Path userFile;
+    private final Path applicationConfigurationFile;
 
     private final Map<Command, Defaults> defaults = new LinkedHashMap<>();
     private final List<AbstractButton> presenters = new ArrayList<>();
@@ -56,16 +56,24 @@ public final class Configuration implements AutoCloseable {
             String tooltip,
             Icon icon,
             String iconResource,
-            KeyStroke key) {
+            KeyStroke key,
+            Boolean selected,
+            boolean enabled) {
 
         static Defaults of(Command command) {
+
+            Boolean selected = command instanceof BooleanCommand booleanCommand
+                    ? booleanCommand.isSelected()
+                    : null;
 
             return new Defaults(
                     command.getName(),
                     command.getToolTip(),
                     command.getIcon(),
                     command.getIconResource(),
-                    command.getKeyBinding());
+                    command.getKeyBinding(),
+                    selected,
+                    command.isEnabled());
         }
 
         void apply(Command command) {
@@ -75,6 +83,11 @@ public final class Configuration implements AutoCloseable {
             command.setIcon(icon);
             command.putValue(Command.ICON_RESOURCE, iconResource);
             command.setKeyBinding(key);
+            command.setEnabled(enabled);
+
+            if (selected != null) {
+                ((BooleanCommand) command).setSelected(selected);
+            }
         }
     }
 
@@ -122,14 +135,14 @@ public final class Configuration implements AutoCloseable {
             ResourceModel menus,
             ResourceModel toolbars,
             Map<String, Command> commandsById,
-            Path userFile) {
+            Path applicationConfigurationFile) {
 
         this.name = name;
         this.commands = commands;
         this.menus = menus;
         this.toolbars = toolbars;
         this.commandsById = Collections.unmodifiableMap(new LinkedHashMap<>(commandsById));
-        this.userFile = userFile;
+        this.applicationConfigurationFile = applicationConfigurationFile;
 
         defaultCommands = commands.getRoot().copy();
         defaultMenus = menus.getRoot().copy();
@@ -290,9 +303,9 @@ public final class Configuration implements AutoCloseable {
     }
 
     /**
-     * Returns a warning recorded while loading user preferences, if any.
+     * Returns a warning recorded while loading the application configuration, if any.
      *
-     * @return warning message, or an empty optional when preferences loaded cleanly
+     * @return warning message, or an empty optional when the application configuration loaded cleanly
      */
     public Optional<String> getLoadWarning() {
         return Optional.ofNullable(loadWarning);
@@ -407,16 +420,16 @@ public final class Configuration implements AutoCloseable {
     }
 
     /**
-     * Saves the current menu, toolbar, and command preferences to the configured user file.
+     * Saves the complete current command configuration to the application configuration file.
      *
      * @throws IOException if the user configuration cannot be written
-     * @throws IllegalStateException if no user configuration path was supplied
+     * @throws IllegalStateException if no application configuration path was supplied
      * @throws IllegalArgumentException if the layout or shortcuts are invalid
      */
-    public void saveUserLayout() throws IOException {
+    public void saveUserConfiguration() throws IOException {
 
-        if (userFile == null) {
-            throw new IllegalStateException("No user configuration path supplied");
+        if (applicationConfigurationFile == null) {
+            throw new IllegalStateException("No application configuration file supplied");
         }
 
         validateGroups(menus, toolbars);
@@ -431,8 +444,20 @@ public final class Configuration implements AutoCloseable {
             }
         }
 
-        ConfigurationManager.save(this, userFile);
+        ConfigurationManager.save(this, applicationConfigurationFile);
         loadWarning = null;
+    }
+
+    /**
+     * Saves the current command configuration to the application configuration file.
+     *
+     * @throws IOException if the user configuration cannot be written
+     * @deprecated use {@link #saveUserConfiguration()}.
+     */
+    @Deprecated
+    public void saveUserLayout() throws IOException {
+
+        saveUserConfiguration();
     }
 
     /**
@@ -441,7 +466,7 @@ public final class Configuration implements AutoCloseable {
     /**
      * Restores the live command presentation and layouts to their application defaults.
      *
-     * <p>This changes the current session; call {@link #saveUserLayout()} to persist the reset.
+     * <p>This changes the current session; call {@link #saveUserConfiguration()} to persist the reset.
      */
     public void resetToDefaults() {
 
@@ -463,6 +488,20 @@ public final class Configuration implements AutoCloseable {
     }
 
     void applyUserConfiguration(ConfigurationManager.Parsed parsed) {
+
+        if (!commandsById.keySet().equals(parsed.commandsById.keySet())) {
+            throw new IllegalArgumentException(
+                    "Saved configuration command IDs do not match the factory configuration");
+        }
+
+        for (Map.Entry<String, Command> entry : commandsById.entrySet()) {
+            Command savedCommand = parsed.commandsById.get(entry.getKey());
+
+            if (savedCommand == null || savedCommand.getClass() != entry.getValue().getClass()) {
+                throw new IllegalArgumentException(
+                        "Saved configuration command class does not match " + entry.getKey());
+            }
+        }
 
         changing = true;
 
